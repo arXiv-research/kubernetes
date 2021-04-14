@@ -665,11 +665,16 @@ func (ss *scaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 		return node, nil
 	}
 
-	if _, err := getScaleSetVMInstanceID(nodeName); err != nil {
+	computerName, ok := ss.Cloud.nodeComputerNames[nodeName]
+	if !ok {
+		computerName = nodeName
+	}
+
+	if _, err := getScaleSetVMInstanceID(computerName); err != nil {
 		return nil, err
 	}
 
-	node, err := getter(nodeName, crt)
+	node, err := getter(computerName, crt)
 	if err != nil {
 		return nil, err
 	}
@@ -678,7 +683,7 @@ func (ss *scaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 	}
 
 	klog.V(2).Infof("Couldn't find VMSS for node %s, refreshing the cache", nodeName)
-	node, err = getter(nodeName, azcache.CacheReadTypeForceRefresh)
+	node, err = getter(computerName, azcache.CacheReadTypeForceRefresh)
 	if err != nil {
 		return nil, err
 	}

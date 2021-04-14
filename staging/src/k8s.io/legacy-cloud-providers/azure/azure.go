@@ -90,6 +90,7 @@ const (
 	loadBalancerSkuStandard = "standard"
 
 	externalResourceGroupLabel = "kubernetes.azure.com/resource-group"
+	computerNameLabel          = "kubernetes.azure.com/computer-name"
 	managedByAzureLabel        = "kubernetes.azure.com/managed"
 )
 
@@ -257,6 +258,8 @@ type Cloud struct {
 	// nodeZones is a mapping from Zone to a sets.String of Node's names in the Zone
 	// it is updated by the nodeInformer
 	nodeZones map[string]sets.String
+	// nodeComputerNames holds the Azure computer name for Kube Nodes
+	nodeComputerNames map[string]string
 	// nodeResourceGroups holds nodes external resource groups
 	nodeResourceGroups map[string]string
 	// unmanagedNodes holds a list of nodes not managed by Azure cloud provider.
@@ -323,6 +326,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
 
 	az := &Cloud{
 		nodeZones:          map[string]sets.String{},
+		nodeComputerNames:  map[string]string{},
 		nodeResourceGroups: map[string]string{},
 		unmanagedNodes:     sets.NewString(),
 		routeCIDRs:         map[string]string{},
@@ -770,6 +774,12 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			}
 		}
 
+		// Remove from nodeComputerNames cache.
+		_, ok = prevNode.ObjectMeta.Labels[computerNameLabel]
+		if ok {
+			delete(az.nodeComputerNames, prevNode.ObjectMeta.Name)
+		}
+
 		// Remove from nodeResourceGroups cache.
 		_, ok = prevNode.ObjectMeta.Labels[externalResourceGroupLabel]
 		if ok {
@@ -791,6 +801,12 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 				az.nodeZones[newZone] = sets.NewString()
 			}
 			az.nodeZones[newZone].Insert(newNode.ObjectMeta.Name)
+		}
+
+		// Add to nodeResourceGroups cache.
+		newCN, ok := newNode.ObjectMeta.Labels[computerNameLabel]
+		if ok && len(newCN) > 0 {
+			az.nodeComputerNames[newNode.ObjectMeta.Name] = strings.ToLower(newCN)
 		}
 
 		// Add to nodeResourceGroups cache.
